@@ -1,7 +1,10 @@
 import streamlit as st
 import numpy as np
 import pickle
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TF warnings
 import tensorflow as tf
+tf.get_logger().setLevel('ERROR')
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Embedding, Dense, LSTM
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -37,16 +40,22 @@ try:
         'LSTM': FixedLSTM
     }
     model = load_model("lstm_model.h5", custom_objects=custom_layers)
+    st.write("✅ Model loaded successfully")
 except Exception as e:
-    st.error(f"Error loading model: {e}")
+    st.error(f"❌ Error loading model: {str(e)}")
+    st.write(f"Debug: {type(e).__name__}")
     st.stop()
 
 # Load tokenizer
 try:
     with open("tokenizer.pkl", "rb") as f:
         tokenizer = pickle.load(f)
+    st.write("✅ Tokenizer loaded successfully")
 except FileNotFoundError:
-    st.error("Error: tokenizer.pkl not found. Make sure the file exists.")
+    st.error("❌ Error: tokenizer.pkl not found")
+    st.stop()
+except Exception as e:
+    st.error(f"❌ Error loading tokenizer: {str(e)}")
     st.stop()
 
 # Create reverse mapping
