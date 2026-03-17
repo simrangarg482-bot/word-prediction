@@ -2,58 +2,84 @@ import streamlit as st
 import numpy as np
 import pickle
 import os
+import json
+import shutil
+import h5py
+import tempfile
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TF warnings
 import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import Embedding, Dense, LSTM
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # -------------------------------------------------------------------------
-from tensorflow.keras.layers import InputLayer
+# FIX: Patch model config JSON to handle Keras version mismatch
+# InputLayer in newer Keras saves 'batch_shape' and 'optional' which
+# older versions don't understand. We fix the h5 file config directly.
+# -------------------------------------------------------------------------
 
-class FixedInputLayer(InputLayer):
-    def __init__(self, *args, **kwargs):
-        # Keras 3 saves 'batch_shape', Keras 2 expects 'batch_input_shape' or just 'input_shape'
-        if "batch_shape" in kwargs:
-            kwargs["batch_input_shape"] = kwargs.pop("batch_shape")
-        kwargs.pop("optional", None)
-        kwargs.pop("quantization_config", None)
-        super().__init__(*args, **kwargs)
-
-class FixedEmbedding(Embedding):
-    def __init__(self, *args, **kwargs):
-        kwargs.pop("quantization_config", None)
-        super().__init__(*args, **kwargs)
-
-class FixedDense(Dense):
-    def __init__(self, *args, **kwargs):
-        kwargs.pop("quantization_config", None)
-        super().__init__(*args, **kwargs)
-
-class FixedLSTM(LSTM):
-    def __init__(self, *args, **kwargs):
-        kwargs.pop("quantization_config", None)
-        super().__init__(*args, **kwargs)
-
+def patch_config(config):
+    """Recursively patch model config dict to fix version incompatibilities."""
+    if isinstance(config, dict):
+        # We want to modify this dict if it's an InputLayer or has InputLayer-like keys
+        if config.get('class_name') == 'InputLayer' or 'batch_shape' in config:
+            # If it's a layer-style dict: {'class_name': '...', 'config': {...}}
+            if 'config' in config and isinstance(config['config'], dict):
+                inner_cfg = config['config']
+                if 'batch_shape' in inner_cfg:
+                    inner_cfg['batch_input_shape'] = inner_cfg.pop('batch_shape')
+                inner_cfg.pop('optional', None)
+                inner_cfg.pop('quantization_config', None)
+            
+            # If it's the config dict itself: {'batch_shape': ..., 'optional': ...}
+            if 'batch_shape' in config:
+                config['batch_input_shape'] = config.pop('batch_shape')
+            config.pop('optional', None)
+            config.pop('quantization_config', None)
+            
+        return {k: patch_config(v) for k, v in config.items()}
+    elif isinstance(config, list):
+        return [patch_config(item) for item in config]
+    return config
 
 # -------------------------------------------------------------------------
 # Load Resources
 # -------------------------------------------------------------------------
 
-# Create reverse mapping
 @st.cache_resource
 def load_resources():
     try:
-        custom_layers = {
-            'InputLayer': FixedInputLayer,
-            'Embedding': FixedEmbedding,
-            'Dense': FixedDense,
-            'LSTM': FixedLSTM
-        }
-        model = load_model("lstm_model.h5", custom_objects=custom_layers)
+        model_path = "lstm_model.h5"
+        # Use system temp directory for the patched file
+        temp_dir = tempfile.gettempdir()
+        patched_path = os.path.join(temp_dir, "temp_patched_model.h5")
+
+        # Copy and patch the model config inside the h5 file
+        if os.path.exists(patched_path):
+            try:
+                os.remove(patched_path)
+            except:
+                pass
+        
+        shutil.copy(model_path, patched_path)
+        
+        with h5py.File(patched_path, "r+") as f:
+            if "model_config" in f.attrs:
+                raw_config = f.attrs["model_config"]
+                if isinstance(raw_config, bytes):
+                    raw_config = raw_config.decode("utf-8")
+                
+                config = json.loads(raw_config)
+                patched = patch_config(config)
+                f.attrs["model_config"] = json.dumps(patched)
+
+        # Load the patched model
+        model = load_model(patched_path, compile=False)
+        
+        # Load tokenizer
         with open("tokenizer.pkl", "rb") as f:
             tokenizer = pickle.load(f)
+            
         return model, tokenizer
     except Exception as e:
         st.error(f"❌ Error loading resources: {str(e)}")
