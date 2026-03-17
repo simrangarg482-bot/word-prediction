@@ -32,33 +32,24 @@ class FixedLSTM(LSTM):
 # Load Resources
 # -------------------------------------------------------------------------
 
-# Load model with all custom object fixes
-try:
-    custom_layers = {
-        'Embedding': FixedEmbedding,
-        'Dense': FixedDense,
-        'LSTM': FixedLSTM
-    }
-    model = load_model("lstm_model.h5", custom_objects=custom_layers)
-    st.write("✅ Model loaded successfully")
-except Exception as e:
-    st.error(f"❌ Error loading model: {str(e)}")
-    st.write(f"Debug: {type(e).__name__}")
-    st.stop()
-
-# Load tokenizer
-try:
-    with open("tokenizer.pkl", "rb") as f:
-        tokenizer = pickle.load(f)
-    st.write("✅ Tokenizer loaded successfully")
-except FileNotFoundError:
-    st.error("❌ Error: tokenizer.pkl not found")
-    st.stop()
-except Exception as e:
-    st.error(f"❌ Error loading tokenizer: {str(e)}")
-    st.stop()
-
 # Create reverse mapping
+@st.cache_resource
+def load_resources():
+    try:
+        custom_layers = {
+            'Embedding': FixedEmbedding,
+            'Dense': FixedDense,
+            'LSTM': FixedLSTM
+        }
+        model = load_model("lstm_model.h5", custom_objects=custom_layers)
+        with open("tokenizer.pkl", "rb") as f:
+            tokenizer = pickle.load(f)
+        return model, tokenizer
+    except Exception as e:
+        st.error(f"❌ Error loading resources: {str(e)}")
+        st.stop()
+
+model, tokenizer = load_resources()
 index_to_word = {index: word for word, index in tokenizer.word_index.items()}
 
 max_len = 477   # use your actual max_len
