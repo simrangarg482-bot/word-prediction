@@ -1,5 +1,6 @@
 streamlit==1.32.0
-numpy==1.26.4
-tensorflow==2.15.0
-keras==2.15.0
-protobuf==4.25.3
+numpy>=1.26.0
+tensorflow==2.16.1
+keras>=3.0.0
+protobuf==4.25.3
+
