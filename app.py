@@ -10,9 +10,17 @@ from tensorflow.keras.layers import Embedding, Dense, LSTM
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # -------------------------------------------------------------------------
-# FIX: Custom Layers to handle version mismatch
-# These filter out the 'quantization_config' argument for all layer types
-# -------------------------------------------------------------------------
+from tensorflow.keras.layers import InputLayer
+
+class FixedInputLayer(InputLayer):
+    def __init__(self, *args, **kwargs):
+        # Keras 3 saves 'batch_shape', Keras 2 expects 'batch_input_shape' or just 'input_shape'
+        if "batch_shape" in kwargs:
+            kwargs["batch_input_shape"] = kwargs.pop("batch_shape")
+        kwargs.pop("optional", None)
+        kwargs.pop("quantization_config", None)
+        super().__init__(*args, **kwargs)
+
 class FixedEmbedding(Embedding):
     def __init__(self, *args, **kwargs):
         kwargs.pop("quantization_config", None)
@@ -28,6 +36,7 @@ class FixedLSTM(LSTM):
         kwargs.pop("quantization_config", None)
         super().__init__(*args, **kwargs)
 
+
 # -------------------------------------------------------------------------
 # Load Resources
 # -------------------------------------------------------------------------
@@ -37,6 +46,7 @@ class FixedLSTM(LSTM):
 def load_resources():
     try:
         custom_layers = {
+            'InputLayer': FixedInputLayer,
             'Embedding': FixedEmbedding,
             'Dense': FixedDense,
             'LSTM': FixedLSTM
