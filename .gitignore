@@ -19,9 +19,18 @@ wheels/
 .installed.cfg
 *.egg
 .DS_Store
-*.pkl
+
+# Virtual Environments
 venv/
+venv*/
 ENV/
+.venv/
+
+# IDEs
 .vscode/
 .idea/
+
+# Logs and Temp
 *.log
+*patched_model.h5
+debug_env.py

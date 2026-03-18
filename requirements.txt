@@ -1,3 +1,7 @@
-streamlit>=1.28.0
+streamlit==1.32.0
 numpy>=1.26.0
-tensorflow>=2.15.0
+tensorflow==2.16.1
+keras>=3.0.0
+protobuf==4.25.3
+h5py>=3.10.0
+
